@@ -298,6 +298,9 @@ We can now directly estimate the MSE of $b$ as an (unbiased) estimator of $\beta
 ```{r}
 mean(d$s^2)             # MSE for estimating beta
 mean(d$s^2 + d$tau^2)   # MSE for estimating mu
+
+sqrt(mean(d$s^2))             # RMSE for estimating beta
+sqrt(mean(d$s^2 + d$tau^2))   # RMSE for estimating mu
 ```
 
 
@@ -533,9 +536,9 @@ ind=which(abs(sim$b/sim$s) > 1.96)
 sig=sim[ind,]
 
 maketable=function(par,b,se,est,L,U){
-  tab=data.frame(method=c("naive","Bayes"),MSE=NA,bias=NA,coverage=NA)
-  tab$MSE[1]=mean((par - b)^2)
-  tab$MSE[2]=mean((par - est)^2)
+  tab=data.frame(method=c("naive","Bayes"),RMSE=NA,bias=NA,coverage=NA)
+  tab$RMSE[1]=sqrt(mean((par - b)^2))
+  tab$RMSE[2]=sqrt(mean((par - est)^2))
   
   tab$bias[1]=mean(abs(b) - abs(par))
   tab$bias[2]=mean(abs(est) - abs(par))
@@ -580,6 +583,7 @@ xtable(tab)
 
 
 #### Average effect in the population
+
 In Table 2 we show the mean squared error (MSE) and coverage for estimating $\mu_i$, which is the average effect in similar trials. We see much better performance of the Bayesian approach compared to naively using the unbiased estimator and it confidence interval. We do note that the coverage of the Bayesian credible interval is clearly short of nominal. This is likely due to the reasons mentioned above.
 
 ```{r, echo=TRUE, results="asis"}
@@ -608,7 +612,7 @@ on statistical significance, i.e. $|b_i/s_i| > 1.96$."
 
 tab=cbind(tab1,tab2[2:4])
 kable(tab,caption=caption,label="tab:mu") %>% 
-  add_header_above(header=c(" "=1,"all"=4,"significant only"=2)) %>%
+  add_header_above(header=c(" "=1,"all"=3,"significant only"=3)) %>%
   kable_styling(latex_options = "HOLD_position")
 ```
 
@@ -630,29 +634,31 @@ mean((sim$mu - sim$b)^2 - (sim$mu - sim$muhat)^2)
 sim$bias1=sim$betahat - sim$beta
 sim$bias2=sim$muhat - sim$mu
 
+# sample_n(.x, 10000) is to reduce size of PDF graphs
+
 p1=ggplot(sim,aes(x=beta,y=bias1)) + 
-  geom_point(size=0.5,alpha=0.5,color="grey") +
+  geom_point(data = ~ sample_n(.x, 10000), size=0.5,alpha=0.5,color="grey") +
   geom_abline(intercept = 0, slope = 0, linetype="dashed") +
   geom_smooth(method="loess",formula="y ~ x",linewidth=0.5,color="black") +
   xlim(-3,3) + ylim(-3,3) + xlab("beta*") + ylab("error for beta*") +
   theme_bw()
 
 p2=ggplot(sim, aes(x = mu,y=bias2)) + 
-  geom_point(size=0.5,alpha=0.5,color="grey") +
+  geom_point(data = ~ sample_n(.x, 10000), size=0.5,alpha=0.5,color="grey") +
   geom_abline(intercept = 0, slope = 0, linetype="dashed") +
   geom_smooth(method="loess",formula="y ~ x",linewidth=0.5,color="black") +
   xlim(-3,3) + ylim(-3,3) + xlab("mu*") + ylab("error for mu*") + 
   theme_bw()
 
 p3=ggplot(sim,aes(x=b,y=bias1)) + 
-  geom_point(size=0.5,alpha=0.5,color="grey") +
+  geom_point(data = ~ sample_n(.x, 10000), size=0.5,alpha=0.5,color="grey") +
   geom_abline(intercept = 0, slope = 0, linetype="dashed") +
   geom_smooth(method="loess",formula="y ~ x",linewidth=0.5,color="black") +
   xlim(-3,3) + ylim(-3,3) + xlab("b*") + ylab("") +
   theme_bw()
 
 p4=ggplot(sim, aes(x = b,y=bias2)) + 
-  geom_point(size=0.5,alpha=0.5,color="grey") +
+  geom_point(data = ~ sample_n(.x, 10000), size=0.5,alpha=0.5,color="grey") +
   geom_abline(intercept = 0, slope = 0, linetype="dashed") +
   geom_smooth(method="loess",formula="y ~ x",linewidth=0.5,color="black") +
   xlim(-3,3) + ylim(-3,3) + xlab("b*") + ylab("") + 
@@ -671,14 +677,14 @@ sim$diffSE1=(sim$beta - sim$b)^2 - (sim$beta - sim$betahat)^2
 sim$diffSE2=(sim$beta - sim$b)^2 - (sim$beta - sim$betahat)^2 
 
 p1=ggplot(sim,aes(x=beta,y=diffSE1)) + 
-  geom_point(size=0.5,alpha=0.5,color="grey") +
+  geom_point(data = ~ sample_n(.x, 10000), size=0.5,alpha=0.5,color="grey") +
   geom_abline(intercept = 0, slope = 0, linetype="dashed") +
   geom_smooth(method="loess",formula="y ~ x",linewidth=0.5,color="black") +
   xlim(-3,3) + ylim(-3,3) + xlab("beta*") + ylab("estimating beta*") +
   theme_bw()
 
 p2=ggplot(sim, aes(x = mu,y=diffSE2)) + 
-  geom_point(size=0.5,alpha=0.5,color="grey") +
+  geom_point(data = ~ sample_n(.x, 10000), size=0.5,alpha=0.5,color="grey") +
   geom_abline(intercept = 0, slope = 0, linetype="dashed") +
   geom_smooth(method="loess",formula="y ~ x",linewidth=0.5,color="black") +
   xlim(-3,3) + ylim(-3,3) + xlab("mu*") + ylab("estimating mu*") + 
@@ -686,14 +692,14 @@ p2=ggplot(sim, aes(x = mu,y=diffSE2)) +
 
 
 p3=ggplot(sim,aes(x=b,y=diffSE1)) + 
-  geom_point(size=0.5,alpha=0.5,color="grey") +
+  geom_point(data = ~ sample_n(.x, 10000), size=0.5,alpha=0.5,color="grey") +
   geom_abline(intercept = 0, slope = 0, linetype="dashed") +
   geom_smooth(method="loess",formula="y ~ x",linewidth=0.5,color="black") +
   xlim(-3,3) + ylim(-3,3) + xlab("b*") + ylab("") +
   theme_bw()
 
 p4=ggplot(sim, aes(x = b,y=diffSE2)) + 
-  geom_point(size=0.5,alpha=0.5,color="grey") +
+  geom_point(data = ~ sample_n(.x, 10000), size=0.5,alpha=0.5,color="grey") +
   geom_abline(intercept = 0, slope = 0, linetype="dashed") +
   geom_smooth(method="loess",formula="y ~ x",linewidth=0.5,color="black") +
   xlim(-3,3) + ylim(-3,3) + xlab("b*") + ylab("") + 
@@ -703,7 +709,7 @@ p = plot_grid(p1, p3, p2, p4, nrow=2,axis="lr",align="v")
 title = ggdraw() + draw_label("difference in squared errors", fontface='bold')
 plot_grid(title,p,ncol=1, rel_heights=c(0.1, 1))
 
-ggsave("diff_error2.pdf",width = 8, height = 5)
-ggsave("diff_error2.png",width = 8, height = 5,dpi=300)
+ggsave("figures/diff_error2.pdf",width = 8, height = 5)
+ggsave("figures/diff_error2.png",width = 8, height = 5,dpi=300)
 ```
 

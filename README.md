@@ -1,6 +1,6 @@
 # Code supplement for "Meta-analysis of a single trial"
 
-Code was prepared by [Erik van Zwet](https://scholar.google.co.uk/citations?user=DaWYR90AAAAJ), then minimally cleaned up and uploaded by me (Witold).
+Code was prepared by [Erik van Zwet](https://scholar.google.co.uk/citations?user=DaWYR90AAAAJ) in 2023-2024, then minimally cleaned up and uploaded by me (Witold).
 
 Results are available in the PDF file in the main folder.
 
@@ -17,3 +17,4 @@ there are tens of thousands of them to fit).
 
 A few objects are constructed in stages, so you may need to re-run several chunks in the order
 that they appear in the Rmd file.
+ 
