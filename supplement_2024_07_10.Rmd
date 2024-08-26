@@ -137,7 +137,7 @@ model {
   for (i in 1:k){
     target += normal_lpdf(b[begin[i]:end[i]] | mu[i],
     sqrt(se2[begin[i]:end[i]] + tau2[i]));
-}
+  }
 }'
 
 n=d %>% group_by(id) %>% summarise(n = n())
@@ -660,8 +660,8 @@ p4=ggplot(sim, aes(x = b,y=bias2)) +
 
 plot_grid(p1, p3, p2, p4, nrow=2,axis="lr",align="v")
 
-ggsave("bias.pdf",width = 8, height = 5)
-ggsave("bias.png",width = 8, height = 5,dpi=300)
+ggsave("figures/bias.pdf",width = 8, height = 5)
+ggsave("figures/bias.png",width = 8, height = 5,dpi=300)
 ```
 
 ## Difference in MSE
