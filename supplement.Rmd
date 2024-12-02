@@ -16,7 +16,11 @@ urlcolor: blue
 
 \newcommand\E{\mathbb{E}}
 
-This PDF supplement was generated using Rmarkdown in R. All code is available at `https://github.com/wwiecek/singletrial`.
+This PDF supplement was generated using Rmarkdown in R. 
+
+All code is available at `https://github.com/wwiecek/singletrial`.
+
+\pagebreak 
 
 # Packages and utility functions
 
@@ -58,22 +62,52 @@ mydt = function(x, m, s, df) dt((x-m)/s, df)/s  # generalized t density
 ```
 
 # Data
-Read the CDSR and put into data.frame `d`. Count studies per meta-analysis in data.frame `meta`.
+
+In Nov 2024 we realised that a logit transform was making binary event studies
+non-comparable to continuous outcome studies, so we swapped it for probit
+Below we show the contents of a new data wrangling script, `prepare_cdsr_data.R`, which we used to
+generate the transformed dataset, i.e. one in which size effects are calculated from
+group means or event numbers
+
+```{r, warning=FALSE, message=FALSE, echo=TRUE, eval=FALSE}
+set.seed(123)
+
+load("data/CDSR.RData")  # read dataframe "data"
+
+d = dplyr::filter(data, outcome.flag %in% c("CONT","DICH") &
+             outcome.group=="efficacy" &
+             outcome.nr==1 &
+             comparison.nr==1)
+
+# make sure each study used only once:
+d=group_by(d,study.name) %>% sample_n(size=1)
+
+d1=dplyr::filter(d, outcome.flag=="CONT")
+d1=escalc(m1i=mean1,sd1i=sd1,n1i=total1,
+          m2i=mean2,sd2i=sd2,n2i=total2,measure="SMD",
+          data=d1, append=TRUE)
+d2=dplyr::filter(d, outcome.flag=="DICH")
+d2=escalc(ai=events1,n1i=total1,
+          ci=events2,n2i=total2,measure="PBIT",
+          data=d2,append=TRUE)
+d=rbind(d1,d2)
+
+d=mutate(d,b=yi,s=sqrt(vi),z=b/s)
+d=dplyr::filter(d,abs(z)<20, abs(b)<5)
+
+d$b=d$yi
+d$s=sqrt(d$vi)
+d$z=d$b/d$s
+
+saveRDS(d, file = "transformed_data/cdsr_smd_pbit.rds")
+```
+
+
+Read the transformed CDSR data and put into data.frame `d`. Count studies per meta-analysis in data.frame `meta`.
+
 
 ```{r, warning=FALSE, message=FALSE, echo=TRUE, eval=TRUE}
-
-load("data/CDSR.RData")
-
-# data = rename(data,b=effect.es,s=effect.se)
-d = filter(data,outcome.flag %in% c("CONT","DICH"))
-d$b[d$outcome.flag=="DICH"]=log(d$b[d$outcome.flag=="DICH"])  # odds ratio's to log odds ratio's
-d$z=d$b/d$s                # same as d$effect.t
-d=select(d,-effect.t)
-d=d[d$outcome.group=="efficacy" & d$outcome.nr==1 & 
-      d$comparison.nr==1 & abs(d$z)<20 & abs(d$b)<5,]
-
-set.seed(123)
-d=group_by(d,study.name) %>% sample_n(size=1)         # make sure each study used only once
+d <- readRDS("transformed_data/cdsr_smd_pbit.rds")
 
 d=arrange(d,id)
 d=group_by(d,id) %>% mutate(k = n()) %>% ungroup()   # count studies within meta-analysis
@@ -149,7 +183,7 @@ dat=list(n=n,N=length(d$b),k=k,b=d$b,se2=d$s^2,begin=begin,end=end) # data for S
 
 m = stan_model(model_code=model)
 fit0=sampling(object=m,
-              data=dat,warmup=1000,iter=2000,chains=4,refresh=0,
+              data=dat,warmup=2000,iter=4000,chains=4,refresh=0,
               pars = c("invnu","log_s_mu", "log_s_logtau",
                        "m_logtau", "nu","s_mu","s_logtau"), include = TRUE)
 
@@ -165,7 +199,11 @@ print(traceplot(fit0,c("invnu","log_s_mu",
 tmp=summary(fit0, pars = c("nu","s_mu","s_logtau","m_logtau"),
             probs = c(0.025, 0.975))$summary
 print(tmp)
-distr0=data.frame(m_mu=0,s_mu=0.48,nu=3.8,m_logtau=-1.44,s_logtau=0.79)
+
+# Values before we switched to probit from logit, for future reference:
+# distr0=data.frame(m_mu=0,s_mu=0.48,nu=3.8,m_logtau=-1.44,s_logtau=0.79)
+
+distr0 <- c(m_mu = 0, apply(as.matrix(fit0), 2, mean)[c("s_mu", "nu", "m_logtau", "s_logtau")])
 ```
 
 
@@ -203,15 +241,15 @@ N=nrow(d)
 for (i in 1:N){
   # cat("\r",i," out of",N)
   fit=baggr(data.frame(tau=d$b[i],se=d$s[i]),model="rubin",
-            prior_hypermean=student_t(3.76,0,0.48),
-            prior_hypersd=lognormal(-1.44,0.79),
+            prior_hypermean=student_t(distr0[["nu"]], distr0[["m_mu"]], distr0[["s_mu"]]),
+            prior_hypersd=lognormal(distr0[["m_logtau"]], distr0[["s_logtau"]]),
             chains=4,refresh=0)
   stanfit=fit$fit                            # stanfit object
   d$Rhat[i]=max(summary(stanfit)$summary[,10])
   if (d$Rhat[i] > 1.01){
     fit=baggr(data.frame(tau=d$b[i],se=d$s[i]),model="rubin",
-              prior_hypermean=student_t(3.76,0,0.48),
-              prior_hypersd=lognormal(-1.44,0.79),
+              prior_hypermean=student_t(distr0[["nu"]], distr0[["m_mu"]], distr0[["s_mu"]]),
+              prior_hypersd=lognormal(distr0[["m_logtau"]], distr0[["s_logtau"]]),
               warmup=2000,iter=5000,chains=4,refresh=0)
     stanfit=fit$fit
     d$Rhat[i]=max(summary(stanfit)$summary[,10])
@@ -352,7 +390,7 @@ end=cumsum(n)
 dat=list(n=n,N=length(d$b),k=k,b=d$b,se2=d$s^2,begin=begin,end=end) # data for Stan
 options(mc.cores = 4)
 m = stan_model(model_code=model)
-fit=sampling(object=m,data=dat,warmup=1000,iter=2000,chains=4,refresh=0,
+fit=sampling(object=m,data=dat,warmup=2000,iter=4000,chains=4,refresh=0,
              pars = c("invnu","m_mu","log_s_mu", "log_s_logtau","m_logtau",
                       "nu","s_mu","s_logtau"))
 save(fit,file="results/cdsr_fit_nonzeromean.Rdata")
@@ -369,14 +407,13 @@ print(tmp)
 ```
 
 ```{r, comment=NA}
-# m_mu=-0.17
-# s_mu=0.43
-# nu=3.05
-# m_logtau=-1.44
-# s_logtau=0.78
+# Old result (before using probit instead of logit):
+# distr=data.frame(m_mu=-0.17,s_mu=0.43,nu=3.05,m_logtau=-1.44,s_logtau=0.78)
 
-distr=data.frame(m_mu=-0.17,s_mu=0.43,nu=3.05,m_logtau=-1.44,s_logtau=0.78)
-distr=rbind(distr0,distr)
+distr_non0 <- c(apply(as.matrix(fit), 2, mean)[c("m_mu", "s_mu", "nu", "m_logtau", "s_logtau")])
+distr <- rbind(round(distr0, 2), 
+               round(distr_non0, 2))
+
 kable(distr)
 xtable(distr)
 ```
@@ -394,13 +431,13 @@ meta=group_by(d,id) %>% summarise(mu=first(mu),
                                   k = first(k))
 N=nrow(meta)
 ind=order(meta$mu)
-mu=0.43*rt(N,df=3.05) - 0.17
+mu=distr_non0[["s_mu"]]*rt(N, distr_non0[["nu"]]) + distr_non0[["m_mu"]]
 mu=sort(mu)
 mu=mu[order(ind)]
 mu=rep(mu,meta$k)
 
 ind=order(meta$tau)
-logtau=rnorm(N,-1.44,0.78)
+logtau=rnorm(N, distr0[["m_logtau"]], distr0[["s_logtau"]])
 logtau=sort(logtau)
 logtau=logtau[order(ind)]
 logtau=rep(logtau,meta$k)
@@ -454,15 +491,15 @@ N=nrow(sim)
 for (i in 1:N){
   # cat("\r",i," out of",N)
   fit=baggr(data.frame(tau=sim$b[i],se=sim$s[i]),model="rubin",
-            prior_hypermean=student_t(3.76,0,0.48),
-            prior_hypersd=lognormal(-1.44,0.79),
+            prior_hypermean=student_t(distr0[["nu"]],0,distr0[["s_mu"]]),
+            prior_hypersd=lognormal(distr0[["m_logtau"]], distr0[["s_logtau"]]),
             chains=4,refresh=0)
   stanfit=fit$fit                            # stanfit object
   sim$Rhat[i]=max(summary(stanfit)$summary[,10])
   if (sim$Rhat[i] > 1.01){
     fit=baggr(data.frame(tau=sim$b[i],se=sim$s[i]),model="rubin",
-              prior_hypermean=student_t(3.05,-0.17,0.43),
-              prior_hypersd=lognormal(-1.44,0.79),
+              prior_hypermean=student_t(distr0[["nu"]],0,distr0[["s_mu"]]),
+              prior_hypersd=lognormal(distr0[["m_logtau"]], distr0[["s_logtau"]]),
               warmup=2000,iter=5000,chains=4,refresh=0)
     stanfit=fit$fit
     sim$Rhat[i]=max(summary(stanfit)$summary[,10])
@@ -523,7 +560,7 @@ df=rbind(df1,df2)
 
 ggp + geom_line(data=df,aes(x = z.abs, y = pred, group=label)) + 
   theme(plot.caption = element_text(hjust = 0)) +
-  labs(caption = "The probability that the sign of the estimated effect matches the sign of the true effect \n or the average effect among similar trials. The black lines are direct estimates while the grey lines are from the Bayesian analysis.")
+  labs(caption = "The probability that the sign of the estimated effect matches the sign of the true effect \n or the average effect among similar trials. The black lines are direct estimates while \n the grey lines are  from the Bayesian analysis.")
 ```
 
 ### Tables

@@ -6,6 +6,10 @@ Results are available in the PDF file in the main folder.
 
 ## Re-rendering file with all results
 
+To avoid any ambiguity about licenses to host CDSR files, the source 
+data files are available (publicly) only at https://osf.io/xjv9g/ and you should place them in `data/`.
+You will also need a `transformed_data/` folder.
+
 All of the code is contained in a single Rmarkdown file, making use of objects saved in 
 `results/`. In addition to generating a PDF, it saves some stand-alone figures in `figures/`.
 
